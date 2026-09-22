@@ -650,7 +650,7 @@ fn build_schema_router(
     corr_config: CorrelationConfig,
     include_event: bool,
     match_detail: MatchDetailLevel,
-    logsource_extractor: Option<LogSourceExtractor>,
+    logsource_extractor: Option<std::sync::Arc<dyn LogSourceExtractor>>,
     partition_rules: bool,
 ) -> SchemaRouter {
     let (signatures, routing) = match schema_config {
@@ -865,7 +865,7 @@ fn cmd_eval_with_correlations(
     bloom_prefilter: bool,
     bloom_max_bytes: Option<usize>,
     #[cfg(feature = "daachorse-index")] cross_rule_ac: bool,
-    logsource_extractor: Option<LogSourceExtractor>,
+    logsource_extractor: Option<std::sync::Arc<dyn LogSourceExtractor>>,
     observe: Option<&ObserveContext>,
     dump_correlation_state: bool,
 ) -> bool {
@@ -1066,7 +1066,7 @@ fn cmd_eval_detection_only(
     bloom_prefilter: bool,
     bloom_max_bytes: Option<usize>,
     #[cfg(feature = "daachorse-index")] cross_rule_ac: bool,
-    logsource_extractor: Option<LogSourceExtractor>,
+    logsource_extractor: Option<std::sync::Arc<dyn LogSourceExtractor>>,
     observe: Option<&ObserveContext>,
 ) -> bool {
     let mut engine = Engine::new();

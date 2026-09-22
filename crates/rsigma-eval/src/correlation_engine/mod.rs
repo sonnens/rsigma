@@ -133,7 +133,7 @@ impl CorrelationEngine {
     /// `process_event` evaluates through this engine.
     pub fn set_logsource_extractor(
         &mut self,
-        extractor: Option<crate::logsource::LogSourceExtractor>,
+        extractor: Option<std::sync::Arc<dyn crate::logsource::LogSourceExtractor>>,
     ) {
         self.engine.set_logsource_extractor(extractor);
     }

@@ -22,6 +22,7 @@
 //! configuration), so there is no separate code path for "routing off".
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use rsigma_parser::{LogSource, SigmaCollection, SigmaRule};
 
@@ -138,7 +139,7 @@ fn pipeline_changes_product(pipeline: &Pipeline) -> bool {
 /// schema is known (for example a `sysmon`-classified event implies
 /// `product: windows`).
 fn resolve_event_logsource<E: Event>(
-    extractor: &LogSourceExtractor,
+    extractor: &dyn LogSourceExtractor,
     implied: Option<&LogSource>,
     event: &E,
 ) -> LogSource {
@@ -170,7 +171,7 @@ fn detect_one<E: Event>(
     classifier: &SchemaClassifier,
     plan: &RoutingPlan,
     engines: &[Engine],
-    extractor: Option<&LogSourceExtractor>,
+    extractor: Option<&dyn LogSourceExtractor>,
     event: &E,
 ) -> Routed1 {
     let schema = classifier.classify(event).map(|m| m.name);
@@ -204,7 +205,7 @@ pub struct SchemaRouter {
     /// Event-logsource extractor for conflict-based pruning; `None` disables
     /// pruning. Resolution happens per event in the router (extractor value
     /// plus the schema's implied logsource), so it is not set on the engines.
-    logsource_extractor: Option<LogSourceExtractor>,
+    logsource_extractor: Option<Arc<dyn LogSourceExtractor>>,
 }
 
 impl SchemaRouter {
@@ -219,7 +220,7 @@ impl SchemaRouter {
         corr_config: CorrelationConfig,
         include_event: bool,
         match_detail: MatchDetailLevel,
-        logsource_extractor: Option<LogSourceExtractor>,
+        logsource_extractor: Option<Arc<dyn LogSourceExtractor>>,
         partition_rules: bool,
     ) -> Result<Self> {
         // Optional, gated per-schema rule partitioning: each engine bound only
@@ -423,7 +424,7 @@ impl SchemaRouter {
         let classifier = &self.classifier;
         let plan = &self.plan;
         let engines = &self.engines;
-        let extractor = self.logsource_extractor.as_ref();
+        let extractor = self.logsource_extractor.as_deref();
         let phase1: Vec<Routed1> = {
             #[cfg(feature = "parallel")]
             {
@@ -468,7 +469,7 @@ impl SchemaRouter {
         let classifier = &self.classifier;
         let plan = &self.plan;
         let engines = &self.engines;
-        let extractor = self.logsource_extractor.as_ref();
+        let extractor = self.logsource_extractor.as_deref();
         let phase1: Vec<Routed1> = {
             #[cfg(feature = "parallel")]
             {
@@ -520,7 +521,7 @@ impl SchemaRouter {
                 outcome: RouteOutcome::Errored,
             },
             RouteDecision::Evaluate { set, unknown } => {
-                let detections = match self.logsource_extractor.as_ref() {
+                let detections = match self.logsource_extractor.as_deref() {
                     Some(ex) => {
                         let implied = schema
                             .as_deref()
@@ -555,6 +556,7 @@ impl SchemaRouter {
 mod tests {
     use super::*;
     use crate::JsonEvent;
+    use crate::logsource::FieldLogSourceExtractor;
     use crate::pipeline::parse_pipeline;
     use crate::schema::RoutingConfig;
     use rsigma_parser::parse_sigma_yaml;
@@ -808,7 +810,7 @@ level: high
             CorrelationConfig::default(),
             false,
             MatchDetailLevel::Off,
-            Some(LogSourceExtractor::new()),
+            Some(Arc::new(FieldLogSourceExtractor::new())),
             false,
         )
         .unwrap();

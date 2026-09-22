@@ -13,6 +13,7 @@ mod filters;
 #[cfg(test)]
 mod tests;
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use rsigma_parser::{
@@ -114,7 +115,7 @@ pub struct Engine {
     /// `None` (default) leaves the hot path unchanged; when `Some`, the
     /// engine extracts each event's logsource once and skips rules whose
     /// logsource conflicts (see [`Engine::set_logsource_extractor`]).
-    logsource_extractor: Option<LogSourceExtractor>,
+    logsource_extractor: Option<Arc<dyn LogSourceExtractor>>,
     /// Monotonic count of rules skipped because their logsource conflicts
     /// with the event's, whether pruned by the index's product partitioning
     /// or by the residual check in the evaluation loop. Incremented only when
@@ -255,14 +256,8 @@ impl Engine {
     /// fails open: an event with no extractable logsource evaluates every
     /// rule. The extractor is read on every `evaluate` call, so it can be
     /// swapped at runtime (e.g. carried across a hot-reload).
-    pub fn set_logsource_extractor(&mut self, extractor: Option<LogSourceExtractor>) {
-        self.logsource_extractor = extractor;
-    }
-
-    /// Returns the configured logsource extractor, if any. `None` means
-    /// logsource pruning is disabled.
-    pub fn logsource_extractor(&self) -> Option<&LogSourceExtractor> {
-        self.logsource_extractor.as_ref()
+    pub fn set_logsource_extractor(&mut self, extractor: Option<Arc<dyn LogSourceExtractor>>) {
+        self.logsource_extractor = extractor.clone();
     }
 
     /// Total rules skipped because their logsource conflicted with an event's,
@@ -1095,6 +1090,9 @@ impl Engine {
     }
 }
 
+
+impl<'a> Engine {
+}
 impl Default for Engine {
     fn default() -> Self {
         Self::new()
