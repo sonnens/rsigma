@@ -317,9 +317,7 @@ level: medium
     // With pruning, the conflicting linux rule is dropped; the windows rule
     // (event has no category, so no conflict) and the product-less generic
     // rule still fire.
-    engine.set_logsource_extractor(Some(std::sync::Arc::new(
-        crate::logsource::FieldLogSourceExtractor::new(),
-    )));
+    engine.set_logsource_extractor(Some(crate::logsource::FieldLogSourceExtractor::new()));
     let titles: Vec<String> = engine
         .evaluate(&event)
         .into_iter()
@@ -357,9 +355,7 @@ detection:
 level: medium
 "#;
     let mut engine = make_engine_with_rule(yaml);
-    engine.set_logsource_extractor(Some(std::sync::Arc::new(
-        crate::logsource::FieldLogSourceExtractor::new(),
-    )));
+    engine.set_logsource_extractor(Some(crate::logsource::FieldLogSourceExtractor::new()));
 
     // Event carries no logsource fields: pruning fails open, both fire.
     let ev = json!({"CommandLine": "whoami"});
@@ -389,9 +385,7 @@ detection:
 level: medium
 "#;
     let mut engine = make_engine_with_rule(yaml);
-    engine.set_logsource_extractor(Some(std::sync::Arc::new(
-        crate::logsource::FieldLogSourceExtractor::new(),
-    )));
+    engine.set_logsource_extractor(Some(crate::logsource::FieldLogSourceExtractor::new()));
 
     let ev1 = json!({"CommandLine": "whoami", "product": "windows"});
     let ev2 = json!({"CommandLine": "whoami", "product": "windows"});
@@ -420,9 +414,7 @@ level: medium
     let collection = parse_sigma_yaml(yaml).unwrap();
     let mut engine = crate::CorrelationEngine::new(crate::CorrelationConfig::default());
     engine.add_collection(&collection).unwrap();
-    engine.set_logsource_extractor(Some(std::sync::Arc::new(
-        crate::logsource::FieldLogSourceExtractor::new(),
-    )));
+    engine.set_logsource_extractor(Some(crate::logsource::FieldLogSourceExtractor::new()));
 
     // The linux rule conflicts with a windows event, so correlation's inner
     // detection evaluation prunes it: no detection fires.

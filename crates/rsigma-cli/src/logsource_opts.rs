@@ -2,9 +2,8 @@
 //! `logsource_routing` config block, used by `engine eval` and `engine daemon`.
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
 
-use rsigma_eval::{FieldLogSourceExtractor, LogSourceExtractor};
+use rsigma_eval::FieldLogSourceExtractor;
 use rsigma_parser::LogSource;
 
 /// A parsed logsource option: the three standard dimensions plus any custom
@@ -105,7 +104,7 @@ pub(crate) fn build_logsource_extractor(
     field_map: Option<&str>,
     event_logsource: Option<&str>,
     evtx_default_product: bool,
-) -> Result<Option<Arc<dyn LogSourceExtractor>>, String> {
+) -> Result<Option<FieldLogSourceExtractor>, String> {
     if !enabled {
         return Ok(None);
     }
@@ -149,12 +148,13 @@ pub(crate) fn build_logsource_extractor(
         extractor = extractor.with_defaults(defaults);
     }
 
-    Ok(Some(Arc::new(extractor)))
+    Ok(Some(extractor))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rsigma_eval::LogSourceExtractor;
 
     #[test]
     fn parses_known_keys() {

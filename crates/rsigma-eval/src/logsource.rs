@@ -20,17 +20,21 @@ use crate::event::Event;
 /// Derives an event [`LogSource`] for conflict-based pruning on the evaluation
 /// hot path.
 ///
-/// Implementors are installed on an engine via
-/// [`Engine::set_logsource_extractor`] as an `Arc<dyn LogSourceExtractor>`;
-/// see [`FieldLogSourceExtractor`] for the built-in field-reading
-/// implementation.
+/// The trait is generic over the event type `E`, so an extractor can be
+/// specialized to one event shape or implemented for every `E: Event`.
+/// Engines are generic over their extractor type (defaulting to
+/// [`FieldLogSourceExtractor`]) and call it statically, with no dynamic
+/// dispatch on the hot path; install one with
+/// [`Engine::set_logsource_extractor`] or build an engine around it with
+/// [`Engine::with_logsource_extractor`].
 ///
 /// [`Engine::set_logsource_extractor`]: crate::Engine::set_logsource_extractor
-pub trait LogSourceExtractor: Send + Sync {
+/// [`Engine::with_logsource_extractor`]: crate::Engine::with_logsource_extractor
+pub trait LogSourceExtractor<E: Event>: Send + Sync {
     /// Extract the event's logsource. Each dimension left unset is a wildcard
     /// for pruning, so an extractor that cannot determine a dimension must
     /// leave it `None` rather than guess (fail-open).
-    fn extract(&self, event: &dyn Event) -> LogSource;
+    fn extract(&self, event: &E) -> LogSource;
 
     /// Resolve one dimension from an event field: the trimmed, non-blank field
     /// value wins, then `default`, then unset.
@@ -38,7 +42,7 @@ pub trait LogSourceExtractor: Send + Sync {
     /// The default body implements the fail-open contract every dimension
     /// follows; implementors override it only to change how a single field is
     /// read.
-    fn resolve(&self, event: &dyn Event, field: &str, default: Option<&str>) -> Option<String> {
+    fn resolve(&self, event: &E, field: &str, default: Option<&str>) -> Option<String> {
         if let Some(value) = event.get_field(field)
             && let Some(s) = value.as_str()
         {
@@ -131,10 +135,10 @@ impl FieldLogSourceExtractor {
     }
 }
 
-impl LogSourceExtractor for FieldLogSourceExtractor {
+impl<E: Event> LogSourceExtractor<E> for FieldLogSourceExtractor {
     /// Extract the event's logsource. Each dimension resolves to the configured
     /// field value, then the static default, then `None`/absent (fail-open).
-    fn extract(&self, event: &dyn Event) -> LogSource {
+    fn extract(&self, event: &E) -> LogSource {
         // Start from the static custom defaults, then let event-field values
         // win per key.
         let mut custom = self.defaults.custom.clone();
