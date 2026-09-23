@@ -28,6 +28,58 @@ use crate::event::Event;
 /// [`Engine::set_logsource_extractor`] or build an engine around it with
 /// [`Engine::with_logsource_extractor`].
 ///
+/// # Example
+///
+/// An extractor for an event type that carries its logsource as out-of-band
+/// metadata rather than as a matchable field:
+///
+/// ```rust
+/// use std::borrow::Cow;
+///
+/// use rsigma_eval::event::{Event, EventValue, JsonEvent};
+/// use rsigma_eval::{Engine, LogSourceExtractor};
+/// use rsigma_parser::LogSource;
+/// use serde_json::{Value, json};
+///
+/// struct TaggedEvent {
+///     source_type: String,
+///     payload: JsonEvent<'static>,
+/// }
+///
+/// impl Event for TaggedEvent {
+///     fn get_field(&self, path: &str) -> Option<EventValue<'_>> {
+///         self.payload.get_field(path)
+///     }
+///     fn any_string_value(&self, pred: &dyn Fn(&str) -> bool) -> bool {
+///         self.payload.any_string_value(pred)
+///     }
+///     fn all_string_values(&self) -> Vec<Cow<'_, str>> {
+///         self.payload.all_string_values()
+///     }
+///     fn to_json(&self) -> Value {
+///         self.payload.to_json()
+///     }
+/// }
+///
+/// struct SourceTypeExtractor;
+///
+/// impl LogSourceExtractor<TaggedEvent> for SourceTypeExtractor {
+///     fn extract(&self, event: &TaggedEvent) -> LogSource {
+///         LogSource {
+///             product: Some(event.source_type.clone()),
+///             ..LogSource::default()
+///         }
+///     }
+/// }
+///
+/// let engine = Engine::with_logsource_extractor(SourceTypeExtractor);
+/// let event = TaggedEvent {
+///     source_type: "windows".to_string(),
+///     payload: JsonEvent::owned(json!({"CommandLine": "whoami"})),
+/// };
+/// assert!(engine.evaluate(&event).is_empty());
+/// ```
+///
 /// [`Engine::set_logsource_extractor`]: crate::Engine::set_logsource_extractor
 /// [`Engine::with_logsource_extractor`]: crate::Engine::with_logsource_extractor
 pub trait LogSourceExtractor<E: Event>: Send + Sync {
@@ -35,24 +87,6 @@ pub trait LogSourceExtractor<E: Event>: Send + Sync {
     /// for pruning, so an extractor that cannot determine a dimension must
     /// leave it `None` rather than guess (fail-open).
     fn extract(&self, event: &E) -> LogSource;
-
-    /// Resolve one dimension from an event field: the trimmed, non-blank field
-    /// value wins, then `default`, then unset.
-    ///
-    /// The default body implements the fail-open contract every dimension
-    /// follows; implementors override it only to change how a single field is
-    /// read.
-    fn resolve(&self, event: &E, field: &str, default: Option<&str>) -> Option<String> {
-        if let Some(value) = event.get_field(field)
-            && let Some(s) = value.as_str()
-        {
-            let trimmed = s.trim();
-            if !trimmed.is_empty() {
-                return Some(trimmed.to_string());
-            }
-        }
-        default.map(str::to_string)
-    }
 }
 
 /// A [`LogSourceExtractor`] that reads configurable event fields plus static
@@ -133,6 +167,20 @@ impl FieldLogSourceExtractor {
         self.defaults = defaults;
         self
     }
+
+    /// Resolve one dimension from an event field: the trimmed, non-blank field
+    /// value wins, then `default`, then unset.
+    fn resolve<E: Event>(event: &E, field: &str, default: Option<&str>) -> Option<String> {
+        if let Some(value) = event.get_field(field)
+            && let Some(s) = value.as_str()
+        {
+            let trimmed = s.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+        default.map(str::to_string)
+    }
 }
 
 impl<E: Event> LogSourceExtractor<E> for FieldLogSourceExtractor {
@@ -143,14 +191,14 @@ impl<E: Event> LogSourceExtractor<E> for FieldLogSourceExtractor {
         // win per key.
         let mut custom = self.defaults.custom.clone();
         for (dimension, field) in &self.custom_fields {
-            if let Some(value) = self.resolve(event, field, None) {
+            if let Some(value) = Self::resolve(event, field, None) {
                 custom.insert(dimension.clone(), value);
             }
         }
         LogSource {
-            product: self.resolve(event, &self.product_field, self.defaults.product.as_deref()),
-            service: self.resolve(event, &self.service_field, self.defaults.service.as_deref()),
-            category: self.resolve(
+            product: Self::resolve(event, &self.product_field, self.defaults.product.as_deref()),
+            service: Self::resolve(event, &self.service_field, self.defaults.service.as_deref()),
+            category: Self::resolve(
                 event,
                 &self.category_field,
                 self.defaults.category.as_deref(),
